@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/constants/app_info.dart';
 import '../../../shared/utils/duration_formatter.dart';
 import '../model_manager.dart';
 import '../tts_controller.dart';
@@ -392,6 +393,58 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'APPLICATION INFORMATION',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        letterSpacing: 1.2,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('App Version', style: TextStyle(fontWeight: FontWeight.w600)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'v${AppInfo.appVersion} (${AppInfo.buildNumber})',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onPrimaryContainer,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 24),
+                            _buildInfoRow('Engine', AppInfo.inferenceEngine),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('Architecture', 'PocketTTS INT8 Offline'),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('Audio Output', AppInfo.audioFormat),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('Studio Voices', '16 Included (8 Female, 8 Male)'),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -400,6 +453,27 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

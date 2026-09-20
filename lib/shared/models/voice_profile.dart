@@ -5,6 +5,7 @@ class VoiceProfile {
   final String? optionalDescription;
   final String? optionalLicenseInfo;
   final bool isCustom;
+  final String? gender; // 'female', 'male', or null
 
   const VoiceProfile({
     required this.id,
@@ -13,6 +14,7 @@ class VoiceProfile {
     this.optionalDescription,
     this.optionalLicenseInfo,
     this.isCustom = false,
+    this.gender,
   });
 
   VoiceProfile copyWith({
@@ -22,6 +24,7 @@ class VoiceProfile {
     String? optionalDescription,
     String? optionalLicenseInfo,
     bool? isCustom,
+    String? gender,
   }) {
     return VoiceProfile(
       id: id ?? this.id,
@@ -30,6 +33,7 @@ class VoiceProfile {
       optionalDescription: optionalDescription ?? this.optionalDescription,
       optionalLicenseInfo: optionalLicenseInfo ?? this.optionalLicenseInfo,
       isCustom: isCustom ?? this.isCustom,
+      gender: gender ?? this.gender,
     );
   }
 
@@ -41,6 +45,7 @@ class VoiceProfile {
       'optionalDescription': optionalDescription,
       'optionalLicenseInfo': optionalLicenseInfo,
       'isCustom': isCustom,
+      'gender': gender,
     };
   }
 
@@ -52,6 +57,7 @@ class VoiceProfile {
       optionalDescription: json['optionalDescription'] as String?,
       optionalLicenseInfo: json['optionalLicenseInfo'] as String?,
       isCustom: json['isCustom'] as bool? ?? false,
+      gender: json['gender'] as String?,
     );
   }
 

@@ -13,6 +13,7 @@ class ModelDownloadView extends StatelessWidget {
     final progress = controller.downloadProgress;
     final status = controller.downloadStatus;
     final error = controller.errorMessage;
+    final isExtracting = progress >= 1.0 && isDownloading;
 
     return Center(
       child: ConstrainedBox(
@@ -52,7 +53,7 @@ class ModelDownloadView extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Pocket Voice operates 100% offline using the high-performance PocketTTS INT8 model directly on your device. No cloud API or internet connection is required after setup.',
+                    'Pocket Voice operates 100% offline using the high-performance PocketTTS INT8 model directly on your device. A one-time download of ~94 MB is required.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -73,7 +74,7 @@ class ModelDownloadView extends StatelessWidget {
                             Icon(Icons.download_rounded,
                                 size: 20, color: theme.colorScheme.primary),
                             const SizedBox(width: 8),
-                            Text('Approximate download:',
+                            Text('Download package:',
                                 style: theme.textTheme.bodyMedium),
                           ],
                         ),
@@ -114,29 +115,33 @@ class ModelDownloadView extends StatelessWidget {
                   const SizedBox(height: 24),
                   if (isDownloading) ...[
                     LinearProgressIndicator(
-                      value: progress > 0 ? progress : null,
+                      value: isExtracting ? null : (progress > 0 ? progress : null),
                       borderRadius: BorderRadius.circular(8),
                       minHeight: 10,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      status.isEmpty ? 'Downloading...' : status,
+                      isExtracting
+                          ? 'Extracting model files... please wait, almost ready!'
+                          : (status.isEmpty ? 'Downloading...' : status),
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: isExtracting ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: controller.cancelModelDownload,
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Cancel Download'),
-                    ),
+                    if (!isExtracting)
+                      OutlinedButton.icon(
+                        onPressed: controller.cancelModelDownload,
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: const Text('Cancel Download'),
+                      ),
                   ] else ...[
                     FilledButton.icon(
                       onPressed: () => controller.downloadModel(),
                       icon: const Icon(Icons.cloud_download_rounded),
-                      label: Text(error != null ? 'Retry Download' : 'Download Model'),
+                      label: Text(error != null ? 'Retry Download' : 'Download Model (~94 MB)'),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),

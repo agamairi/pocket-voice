@@ -23,6 +23,8 @@ class _TtsPageState extends State<TtsPage> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_onControllerChanged);
+
     // Default helpful starter template for YouTube narration
     _scriptTextController.text =
         'Welcome back to the channel!\n\n'
@@ -34,8 +36,24 @@ class _TtsPageState extends State<TtsPage> {
     });
   }
 
+  void _onControllerChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TtsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+    }
+  }
+
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
     _scriptTextController.dispose();
     _scriptFocusNode.dispose();
     super.dispose();

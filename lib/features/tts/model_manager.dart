@@ -143,29 +143,47 @@ class ModelManager {
         throw Exception('Download cancelled by user.');
       }
 
-      onStatus('Decompressing and installing model files...');
+      onStatus('Extracting model files... (please wait)');
       onProgress(receivedBytes, totalBytes, 1.0);
 
-      // Run archive decompression in background isolate to keep UI completely smooth
-      final archiveBytes = await tempArchiveFile.readAsBytes();
-      final targetPath = targetModelDir.path;
+      await targetModelDir.create(recursive: true);
 
-      await Isolate.run(() {
-        final bz2 = BZip2Decoder().decodeBytes(archiveBytes);
-        final tar = TarDecoder().decodeBytes(bz2);
-
-        for (final entry in tar) {
-          if (!entry.isFile) continue;
-          // Archive contains prefix e.g. "sherpa-onnx-pocket-tts-int8-2026-01-26/filename"
-          final parts = entry.name.split('/');
-          final relativeName = parts.skip(1).join('/');
-          if (relativeName.isEmpty) continue;
-
-          final destFile = File('$targetPath/$relativeName');
-          destFile.parent.createSync(recursive: true);
-          destFile.writeAsBytesSync(entry.content as List<int>);
+      // 1. Try fast native tar extraction if available
+      bool extractedNatively = false;
+      try {
+        final tarBinary = Platform.isAndroid ? '/system/bin/tar' : 'tar';
+        final result = await Process.run(tarBinary, [
+          '-xjf',
+          tempArchiveFile.path,
+          '-C',
+          targetModelDir.parent.path,
+        ]);
+        if (result.exitCode == 0 && await verifyModelFiles()) {
+          extractedNatively = true;
         }
-      });
+      } catch (_) {}
+
+      // 2. Fall back to pure Dart isolate extraction if native tar was not supported
+      if (!extractedNatively) {
+        final archiveBytes = await tempArchiveFile.readAsBytes();
+        final targetPath = targetModelDir.path;
+
+        await Isolate.run(() {
+          final bz2 = BZip2Decoder().decodeBytes(archiveBytes);
+          final tar = TarDecoder().decodeBytes(bz2);
+
+          for (final entry in tar) {
+            if (!entry.isFile) continue;
+            final parts = entry.name.split('/');
+            final relativeName = parts.skip(1).join('/');
+            if (relativeName.isEmpty) continue;
+
+            final destFile = File('$targetPath/$relativeName');
+            destFile.parent.createSync(recursive: true);
+            destFile.writeAsBytesSync(entry.content as List<int>);
+          }
+        });
+      }
 
       // Remove temp archive file
       if (await tempArchiveFile.exists()) {

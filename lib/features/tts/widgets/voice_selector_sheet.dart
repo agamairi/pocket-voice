@@ -3,10 +3,17 @@ import 'package:flutter/material.dart';
 import '../../../shared/models/voice_profile.dart';
 import '../tts_controller.dart';
 
-class VoiceSelectorSheet extends StatelessWidget {
+class VoiceSelectorSheet extends StatefulWidget {
   final TtsController controller;
 
   const VoiceSelectorSheet({super.key, required this.controller});
+
+  @override
+  State<VoiceSelectorSheet> createState() => _VoiceSelectorSheetState();
+}
+
+class _VoiceSelectorSheetState extends State<VoiceSelectorSheet> {
+  String _selectedCategory = 'all'; // 'all', 'female', 'male', 'custom'
 
   Future<void> _handleImportVoice(BuildContext context) async {
     try {
@@ -26,55 +33,73 @@ class VoiceSelectorSheet extends StatelessWidget {
 
       final nameController = TextEditingController(text: defaultName);
       final descController = TextEditingController();
+      String selectedGender = 'female';
 
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Import Custom Voice'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Import a reference recording (.wav) to condition PocketTTS. The audio file stays entirely private on your device.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Voice Name',
-                  hintText: 'e.g. Studio Narrator',
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Import Custom Voice'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Import a reference recording (.wav) to clone with PocketTTS. The audio file stays entirely private on your device.',
+                  style: TextStyle(fontSize: 13),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  labelText: 'Optional Description',
-                  hintText: 'e.g. Warm documentary style',
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Voice Name',
+                    hintText: 'e.g. Studio Narrator',
+                  ),
                 ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(
+                    labelText: 'Optional Description',
+                    hintText: 'e.g. Warm documentary style',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedGender,
+                  decoration: const InputDecoration(labelText: 'Gender'),
+                  items: const [
+                    DropdownMenuItem(value: 'female', child: Text('Female')),
+                    DropdownMenuItem(value: 'male', child: Text('Male')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => selectedGender = val);
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Import'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Import'),
-            ),
-          ],
         ),
       );
 
       if (confirmed == true && nameController.text.trim().isNotEmpty) {
-        await controller.importCustomVoice(
+        await widget.controller.importCustomVoice(
           filePath: path,
           name: nameController.text.trim(),
           description: descController.text.trim(),
+          gender: selectedGender,
         );
       }
     } catch (e) {
@@ -108,7 +133,7 @@ class VoiceSelectorSheet extends StatelessWidget {
             onPressed: () {
               final newName = textController.text.trim();
               if (newName.isNotEmpty) {
-                controller.renameCustomVoice(voice.id, newName);
+                widget.controller.renameCustomVoice(voice.id, newName);
               }
               Navigator.pop(ctx);
             },
@@ -135,7 +160,7 @@ class VoiceSelectorSheet extends StatelessWidget {
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () {
-              controller.deleteCustomVoice(voice.id);
+              widget.controller.deleteCustomVoice(voice.id);
               Navigator.pop(ctx);
             },
             child: const Text('Delete'),
@@ -148,17 +173,30 @@ class VoiceSelectorSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final controller = widget.controller;
     final voices = controller.voices;
     final selectedVoice = controller.selectedVoice;
     final defaultVoiceId = controller.settings.defaultVoiceId;
 
-    final bundled = voices.where((v) => !v.isCustom).toList();
+    final females = voices.where((v) => !v.isCustom && v.gender == 'female').toList();
+    final males = voices.where((v) => !v.isCustom && v.gender == 'male').toList();
     final custom = voices.where((v) => v.isCustom).toList();
 
+    List<VoiceProfile> displayedVoices;
+    if (_selectedCategory == 'female') {
+      displayedVoices = females;
+    } else if (_selectedCategory == 'male') {
+      displayedVoices = males;
+    } else if (_selectedCategory == 'custom') {
+      displayedVoices = custom;
+    } else {
+      displayedVoices = voices;
+    }
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
+      initialChildSize: 0.8,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
         return Container(
@@ -196,63 +234,47 @@ class VoiceSelectorSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
+              // Category filter chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
                   children: [
-                    if (bundled.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text(
-                          'BUNDLED PROFILES',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            letterSpacing: 1.2,
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      ...bundled.map((voice) => _VoiceListTile(
-                            voice: voice,
-                            isSelected: selectedVoice?.id == voice.id,
-                            isDefault: defaultVoiceId == voice.id,
-                            onSelect: () {
-                              controller.selectVoice(voice);
-                              Navigator.pop(context);
-                            },
-                            onSetDefault: () => controller.setDefaultVoice(voice),
-                            onPlaySample: () => controller.playAudio(voice.referenceAudioPath),
-                          )),
-                    ],
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'CUSTOM PROFILES',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              letterSpacing: 1.2,
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            '${custom.length} imported',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
+                    FilterChip(
+                      label: Text('All (${voices.length})'),
+                      selected: _selectedCategory == 'all',
+                      onSelected: (_) => setState(() => _selectedCategory = 'all'),
                     ),
-                    if (custom.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Center(
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Female (${females.length})'),
+                      selected: _selectedCategory == 'female',
+                      onSelected: (_) => setState(() => _selectedCategory = 'female'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Male (${males.length})'),
+                      selected: _selectedCategory == 'male',
+                      onSelected: (_) => setState(() => _selectedCategory = 'male'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Custom (${custom.length})'),
+                      selected: _selectedCategory == 'custom',
+                      onSelected: (_) => setState(() => _selectedCategory = 'custom'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: displayedVoices.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
                           child: Text(
-                            'No custom voices imported yet.\nTap "Import WAV" above to add your own voice reference.',
+                            _selectedCategory == 'custom'
+                                ? 'No custom voices imported yet.\nTap "Import WAV" above to add your own.'
+                                : 'No voices available in this category.',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -260,8 +282,12 @@ class VoiceSelectorSheet extends StatelessWidget {
                           ),
                         ),
                       )
-                    else
-                      ...custom.map((voice) => _VoiceListTile(
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: displayedVoices.length,
+                        itemBuilder: (context, index) {
+                          final voice = displayedVoices[index];
+                          return _VoiceListTile(
                             voice: voice,
                             isSelected: selectedVoice?.id == voice.id,
                             isDefault: defaultVoiceId == voice.id,
@@ -271,11 +297,15 @@ class VoiceSelectorSheet extends StatelessWidget {
                             },
                             onSetDefault: () => controller.setDefaultVoice(voice),
                             onPlaySample: () => controller.playAudio(voice.referenceAudioPath),
-                            onRename: () => _showRenameCustomVoiceDialog(context, voice),
-                            onDelete: () => _showDeleteCustomVoiceDialog(context, voice),
-                          )),
-                  ],
-                ),
+                            onRename: voice.isCustom
+                                ? () => _showRenameCustomVoiceDialog(context, voice)
+                                : null,
+                            onDelete: voice.isCustom
+                                ? () => _showDeleteCustomVoiceDialog(context, voice)
+                                : null,
+                          );
+                        },
+                      ),
               ),
             ],
           ),
@@ -319,9 +349,7 @@ class _VoiceListTile extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : Colors.transparent,
+          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
           width: 1.5,
         ),
       ),
@@ -335,7 +363,11 @@ class _VoiceListTile extends StatelessWidget {
           foregroundColor: isSelected
               ? theme.colorScheme.onPrimary
               : theme.colorScheme.onSurfaceVariant,
-          child: Icon(voice.isCustom ? Icons.person_outline : Icons.mic_none_rounded),
+          child: Icon(
+            voice.isCustom
+                ? Icons.person_outline
+                : (voice.gender == 'female' ? Icons.female_rounded : Icons.male_rounded),
+          ),
         ),
         title: Row(
           children: [
@@ -347,6 +379,23 @@ class _VoiceListTile extends StatelessWidget {
                 ),
               ),
             ),
+            if (voice.gender != null)
+              Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  voice.gender!.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
             if (isDefault)
               Container(
                 margin: const EdgeInsets.only(left: 6),
@@ -378,7 +427,7 @@ class _VoiceListTile extends StatelessWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.volume_up_outlined, size: 20),
-              tooltip: 'Listen to reference audio',
+              tooltip: 'Listen to reference voice',
               onPressed: onPlaySample,
             ),
             PopupMenuButton<String>(

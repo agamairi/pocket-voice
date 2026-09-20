@@ -5,11 +5,12 @@ void main() {
   group('VoiceProfile Model & Serialization Tests', () {
     test('Serializes to and from JSON correctly', () {
       const profile = VoiceProfile(
-        id: 'bria',
-        name: 'Bria',
-        referenceAudioPath: '/data/user/0/com.pocketvoice/app_flutter/models/test_wavs/bria.wav',
-        optionalDescription: 'Clear female voice',
-        optionalLicenseInfo: 'CC-BY',
+        id: 'karen',
+        name: 'Karen',
+        referenceAudioPath: 'assets/voices/karen.wav',
+        optionalDescription: 'Warm, expressive female studio narration',
+        optionalLicenseInfo: 'CC-BY-4.0 (LibriTTS)',
+        gender: 'female',
         isCustom: false,
       );
 
@@ -21,6 +22,7 @@ void main() {
       expect(restored.referenceAudioPath, equals(profile.referenceAudioPath));
       expect(restored.optionalDescription, equals(profile.optionalDescription));
       expect(restored.optionalLicenseInfo, equals(profile.optionalLicenseInfo));
+      expect(restored.gender, equals('female'));
       expect(restored.isCustom, equals(profile.isCustom));
     });
 

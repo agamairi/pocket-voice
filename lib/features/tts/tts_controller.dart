@@ -92,9 +92,12 @@ class TtsController extends ChangeNotifier {
       notifyListeners();
     });
 
-    _audioPlayer.onPlayerComplete.listen((_) {
+    _audioPlayer.onPlayerComplete.listen((_) async {
       _isPlaying = false;
       _playbackPosition = Duration.zero;
+      try {
+        await _audioPlayer.stop();
+      } catch (_) {}
       notifyListeners();
     });
   }
@@ -216,12 +219,14 @@ class TtsController extends ChangeNotifier {
     required String filePath,
     required String name,
     String? description,
+    String? gender,
   }) async {
     try {
       final profile = await voiceManager.importCustomVoice(
         sourceFilePath: filePath,
         name: name,
         description: description,
+        gender: gender,
       );
       await refreshVoices();
       _selectedVoice = profile;
@@ -389,12 +394,29 @@ class TtsController extends ChangeNotifier {
       if (_currentlyPlayingPath != filePath) {
         await _audioPlayer.stop();
         _currentlyPlayingPath = filePath;
+        _playbackPosition = Duration.zero;
         await _audioPlayer.play(DeviceFileSource(filePath));
       } else {
         if (_isPlaying) {
           await _audioPlayer.pause();
         } else {
-          await _audioPlayer.resume();
+          // If the track is at the start (e.g. completed or stopped) or at/past the duration,
+          // replay from scratch since resume() on Android won't work on completed MediaPlayer.
+          if (_playbackPosition == Duration.zero ||
+              (_playbackDuration > Duration.zero && _playbackPosition >= _playbackDuration)) {
+            await _audioPlayer.stop();
+            await _audioPlayer.play(DeviceFileSource(filePath));
+          } else {
+            try {
+              await _audioPlayer.resume();
+            } catch (_) {
+              await _audioPlayer.stop();
+              await _audioPlayer.play(
+                DeviceFileSource(filePath),
+                position: _playbackPosition,
+              );
+            }
+          }
         }
       }
     } catch (e) {
@@ -408,7 +430,11 @@ class TtsController extends ChangeNotifier {
   }
 
   Future<void> seekAudio(Duration position) async {
-    await _audioPlayer.seek(position);
+    _playbackPosition = position;
+    try {
+      await _audioPlayer.seek(position);
+    } catch (_) {}
+    notifyListeners();
   }
 
   Future<void> stopAudio() async {
