@@ -112,5 +112,45 @@ void main() {
       // 9 words / 2.5 words/sec = 3.6 sec + (1 sentence pause: 0.2s) + (1 paragraph pause: 0.5s) = 4.3s
       expect(duration, closeTo(4.3, 0.1));
     });
+
+    test('Keeps inline tags inside one sentence', () {
+      const input = 'We did it [excited] finally! Next one.';
+
+      final chunks = TextSegmenter.segmentText(input);
+
+      expect(chunks.length, equals(2));
+      expect(chunks[0].text, equals('We did it finally!'));
+      expect(chunks[0].tag, equals('excited'));
+      expect(chunks[0].isEndOfParagraph, isFalse);
+      expect(chunks[1].text, equals('Next one.'));
+      expect(chunks[1].tag, equals('excited'));
+      expect(chunks[1].isEndOfParagraph, isTrue);
+    });
+
+    test('Tag on its own line starts a new paragraph', () {
+      const input = '[normal]\nFirst line here.\n[excited]\nSecond line here.';
+
+      final chunks = TextSegmenter.segmentText(input);
+
+      expect(chunks.length, equals(2));
+      expect(chunks[0].tag, equals('normal'));
+      expect(chunks[0].isEndOfParagraph, isTrue);
+      expect(chunks[1].tag, equals('excited'));
+      expect(chunks[1].isEndOfParagraph, isTrue);
+    });
+
+    test('Inline tag does not break paragraph', () {
+      const input = 'Hello [whisper] there\n\nNew paragraph.';
+
+      final chunks = TextSegmenter.segmentText(input);
+
+      expect(chunks.length, equals(2));
+      expect(chunks[0].text, equals('Hello there'));
+      expect(chunks[0].tag, equals('whisper'));
+      expect(chunks[0].isEndOfParagraph, isTrue);
+      expect(chunks[1].text, equals('New paragraph.'));
+      expect(chunks[1].tag, equals('whisper'));
+      expect(chunks[1].isEndOfParagraph, isTrue);
+    });
   });
 }

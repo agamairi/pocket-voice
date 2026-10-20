@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pocket_voice/shared/utils/wav_concatenator.dart';
@@ -81,6 +82,63 @@ void main() {
       // Index 2: 0.0 -> 0
       final pcm2 = byteData.getInt16(48, Endian.little);
       expect(pcm2, equals(0));
+    });
+
+    test('normalizeLoudness raises a quiet chunk to target RMS', () {
+      final samples = Float32List(2400);
+      for (int i = 0; i < samples.length; i++) {
+        samples[i] = 0.05 * sin(2 * pi * 200 * i / 24000);
+      }
+
+      final normalized = WavConcatenator.normalizeLoudness(samples);
+      final rms = sqrt(
+        normalized.fold<double>(0.0, (sum, sample) => sum + sample * sample) /
+            normalized.length,
+      );
+
+      expect(rms, closeTo(0.1, 0.01));
+    });
+
+    test('normalizeLoudness lowers a loud chunk to target RMS', () {
+      final samples = Float32List(2400);
+      for (int i = 0; i < samples.length; i++) {
+        samples[i] = 0.2 * sin(2 * pi * 200 * i / 24000);
+      }
+
+      final normalized = WavConcatenator.normalizeLoudness(samples);
+      final rms = sqrt(
+        normalized.fold<double>(0.0, (sum, sample) => sum + sample * sample) /
+            normalized.length,
+      );
+
+      expect(rms, closeTo(0.1, 0.01));
+    });
+
+    test('normalizeLoudness keeps peaks under the ceiling', () {
+      final samples = Float32List.fromList(List<double>.filled(2400, 0.01));
+      samples[1200] = 0.5;
+
+      final normalized = WavConcatenator.normalizeLoudness(samples);
+      final maxAbsolute = normalized
+          .map((sample) => sample.abs())
+          .reduce((a, b) => a > b ? a : b);
+
+      expect(maxAbsolute, lessThanOrEqualTo(0.98 + 1e-6));
+    });
+
+    test('normalizeLoudness leaves silence and does not mutate input', () {
+      final silence = Float32List(8);
+      final normalizedSilence = WavConcatenator.normalizeLoudness(silence);
+
+      expect(normalizedSilence.length, equals(silence.length));
+      expect(normalizedSilence.every((sample) => sample == 0.0), isTrue);
+      expect(identical(normalizedSilence, silence), isFalse);
+
+      final input = Float32List.fromList([0.1, -0.2, 0.3]);
+      final original = Float32List.fromList(input);
+      WavConcatenator.normalizeLoudness(input);
+
+      expect(input, orderedEquals(original));
     });
   });
 }

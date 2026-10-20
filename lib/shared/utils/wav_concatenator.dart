@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 class WavConcatenator {
   /// Concatenates audio chunks with silence pauses between them.
-  /// Applies a tiny fade-in/fade-out (2ms) at chunk boundaries to prevent audio clicks.
+  /// Applies a tiny fade-in/fade-out (0.5ms) at chunk boundaries to prevent audio clicks.
   static Float32List concatenateChunks({
     required List<Float32List> chunks,
     required List<int> pausesMs,
@@ -28,7 +29,8 @@ class WavConcatenator {
 
     final combined = Float32List(totalSamples);
     int offset = 0;
-    final fadeLength = (sampleRate * 0.002).round(); // ~48 samples for 2ms fade
+    const edgeFadeSeconds = 0.0005; // 0.5ms fade at each chunk edge
+    final fadeLength = (sampleRate * edgeFadeSeconds).round();
 
     for (int i = 0; i < chunks.length; i++) {
       final chunk = chunks[i];
@@ -54,6 +56,38 @@ class WavConcatenator {
     }
 
     return combined;
+  }
+
+  /// Normalizes a chunk to a target RMS level without mutating its input.
+  static Float32List normalizeLoudness(
+    Float32List samples, {
+    double targetRms = 0.1,
+    double maxGain = 4.0,
+    double peakCeiling = 0.98,
+  }) {
+    final normalized = Float32List.fromList(samples);
+    if (samples.isEmpty) return normalized;
+
+    double sumSquares = 0.0;
+    double peak = 0.0;
+    for (final sample in samples) {
+      sumSquares += sample * sample;
+      if (sample.abs() > peak) peak = sample.abs();
+    }
+
+    final rms = sqrt(sumSquares / samples.length);
+    if (rms < 1e-6) return normalized;
+
+    var gain = targetRms / rms;
+    if (gain > maxGain) gain = maxGain;
+    if (peak * gain > peakCeiling) {
+      gain = peakCeiling / peak;
+    }
+
+    for (int i = 0; i < normalized.length; i++) {
+      normalized[i] = samples[i] * gain;
+    }
+    return normalized;
   }
 
   /// Creates a standard 44-byte RIFF/WAVE header + 16-bit PCM payload.

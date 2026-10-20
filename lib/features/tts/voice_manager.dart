@@ -7,12 +7,15 @@ import 'package:uuid/uuid.dart';
 import '../../shared/models/voice_profile.dart';
 import 'model_manager.dart';
 
+const _libriTtsLicense = 'Creative Commons Attribution (LibriTTS corpus)';
+
 class _BundledVoiceInfo {
   final String id;
   final String name;
   final String assetFileName;
   final String gender;
   final String description;
+  final String license;
 
   const _BundledVoiceInfo({
     required this.id,
@@ -20,6 +23,7 @@ class _BundledVoiceInfo {
     required this.assetFileName,
     required this.gender,
     required this.description,
+    this.license = _libriTtsLicense,
   });
 }
 
@@ -86,7 +90,7 @@ class VoiceManager {
       description: 'Crisp, modern, upbeat educational voice',
     ),
 
-    // 8 Male Voices
+    // 10 Male Voices (2 deep)
     _BundledVoiceInfo(
       id: 'male_eric',
       name: 'Eric',
@@ -143,13 +147,29 @@ class VoiceManager {
       gender: 'male',
       description: 'Resonant, classical theater voice',
     ),
+    _BundledVoiceInfo(
+      id: 'male_victor',
+      name: 'Victor',
+      assetFileName: 'male_victor.wav',
+      gender: 'male',
+      description: 'Deep, resonant baritone narrator (pitched down from John)',
+      license: 'Creative Commons Attribution (LibriTTS corpus), pitch-shifted derivative',
+    ),
+    _BundledVoiceInfo(
+      id: 'male_bruno',
+      name: 'Bruno',
+      assetFileName: 'male_bruno.wav',
+      gender: 'male',
+      description: 'Deep bass, low commanding trailer voice (pitched down from Eric)',
+      license: 'Creative Commons Attribution (LibriTTS corpus), pitch-shifted derivative',
+    ),
   ];
 
   final ModelManager modelManager;
 
   VoiceManager({required this.modelManager});
 
-  /// Extracts and returns all bundled voices (8 female, 8 male, plus model samples).
+  /// Extracts and returns all bundled voices (8 female, 10 male, plus model samples).
   Future<List<VoiceProfile>> getBundledVoices() async {
     final docsDir = await getApplicationDocumentsDirectory();
     final bundledDir = Directory('${docsDir.path}/bundled_voices');
@@ -157,7 +177,7 @@ class VoiceManager {
 
     final voices = <VoiceProfile>[];
 
-    // 1. Load the 16 studio reference voices
+    // 1. Load the 18 studio reference voices
     for (final info in _predefinedVoices) {
       final targetFile = File('${bundledDir.path}/${info.assetFileName}');
       if (!await targetFile.exists() || await targetFile.length() == 0) {
@@ -179,7 +199,7 @@ class VoiceManager {
           name: info.name,
           referenceAudioPath: targetFile.path,
           optionalDescription: info.description,
-          optionalLicenseInfo: 'Creative Commons Attribution (LibriTTS corpus)',
+          optionalLicenseInfo: info.license,
           isCustom: false,
           gender: info.gender,
         ));

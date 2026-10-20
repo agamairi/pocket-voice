@@ -79,35 +79,94 @@ class TextSegmenter {
 
   /// Splits script into sequential chunks optimized for PocketTTS inference.
   static List<TextChunk> segmentText(String rawInput) {
-    final taggedBlocks = parseTaggedBlocks(rawInput);
     final chunks = <TextChunk>[];
     int chunkIndex = 0;
 
-    for (final block in taggedBlocks) {
-      // Split by paragraph (two or more newlines)
-      final paragraphs = block.text
-          .split(RegExp(r'\r?\n\s*\r?\n+'))
-          .map((p) => p.replaceAll(RegExp(r'\r?\n'), ' ').trim())
-          .where((p) => p.isNotEmpty)
-          .toList();
+    // First split on blank lines and tags that begin their own line. Inline
+    // tags remain in the same paragraph and are handled below.
+    final paragraphs = <String>[];
+    final paragraphLines = <String>[];
 
-      for (int pIdx = 0; pIdx < paragraphs.length; pIdx++) {
-        final paragraph = paragraphs[pIdx];
-        final sentences = _splitSentences(paragraph);
+    void finishParagraph() {
+      if (paragraphLines.isNotEmpty) {
+        paragraphs.add(paragraphLines.join('\n'));
+        paragraphLines.clear();
+      }
+    }
 
-        for (int sIdx = 0; sIdx < sentences.length; sIdx++) {
-          final sentence = sentences[sIdx].trim();
-          if (sentence.isEmpty) continue;
+    for (final line in rawInput.split(RegExp(r'\r?\n'))) {
+      if (line.trim().isEmpty) {
+        finishParagraph();
+        continue;
+      }
 
-          final isLastSentenceInParagraph = (sIdx == sentences.length - 1);
+      final firstTag = tagRegex.firstMatch(line);
+      final tagStartsLine = firstTag != null &&
+          line.substring(0, firstTag.start).trim().isEmpty;
+      if (tagStartsLine && paragraphLines.isNotEmpty) {
+        finishParagraph();
+      }
+      paragraphLines.add(line);
+    }
+    finishParagraph();
 
-          chunks.add(TextChunk(
-            index: chunkIndex++,
-            text: sentence,
-            isEndOfParagraph: isLastSentenceInParagraph,
-            tag: block.tag,
-          ));
+    String? currentTag;
+    for (final rawParagraph in paragraphs) {
+      final paragraphStartTag = currentTag;
+      final normalized = StringBuffer();
+      final characterTags = <String?>[];
+      var pendingSpace = false;
+      var activeTag = currentTag;
+
+      var position = 0;
+      while (position < rawParagraph.length) {
+        final tagMatch = tagRegex.matchAsPrefix(rawParagraph, position);
+        if (tagMatch != null) {
+          activeTag = tagMatch.group(1);
+          position = tagMatch.end;
+          continue;
         }
+
+        final char = rawParagraph[position];
+        position++;
+        if (RegExp(r'\s').hasMatch(char)) {
+          pendingSpace = normalized.length > 0;
+          continue;
+        }
+
+        if (pendingSpace) {
+          normalized.write(' ');
+          characterTags.add(activeTag);
+          pendingSpace = false;
+        }
+        normalized.write(char);
+        characterTags.add(activeTag);
+      }
+
+      currentTag = activeTag;
+      final paragraph = normalized.toString().trim();
+      if (paragraph.isEmpty) continue;
+
+      final sentences = _splitSentences(paragraph);
+      var searchStart = 0;
+      for (int sIdx = 0; sIdx < sentences.length; sIdx++) {
+        final sentence = sentences[sIdx].trim();
+        if (sentence.isEmpty) continue;
+
+        final sentenceStart = paragraph.indexOf(sentence, searchStart);
+        if (sentenceStart == -1) continue;
+        final sentenceEnd = sentenceStart + sentence.length - 1;
+        final sentenceTag = sentenceEnd < characterTags.length
+            ? characterTags[sentenceEnd]
+            : paragraphStartTag;
+
+        chunks.add(TextChunk(
+          index: chunkIndex++,
+          text: sentence,
+          isEndOfParagraph: sIdx == sentences.length - 1,
+          tag: sentenceTag,
+        ));
+        searchStart = sentenceStart + sentence.length;
       }
     }
 

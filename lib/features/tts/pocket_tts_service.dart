@@ -371,7 +371,8 @@ void _ttsWorkerIsolate(_IsolateJobConfig job) async {
         return;
       }
 
-      audioChunks.add(audio.samples);
+      // PocketTTS output level varies between calls; match each sentence to a common level.
+      audioChunks.add(WavConcatenator.normalizeLoudness(audio.samples));
       totalSamplesGenerated += audio.samples.length;
 
       // Add pause if not the last chunk
