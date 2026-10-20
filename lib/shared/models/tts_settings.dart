@@ -6,6 +6,10 @@ class TtsSettings {
   final String defaultVoiceId;
   final int maxReferenceAudioLen;
 
+  /// When true, each paragraph is generated in one pass so the voice stays steady
+  /// within it. Sentence pauses then no longer apply; paragraph pauses still do.
+  final bool paragraphMode;
+
   const TtsSettings({
     this.sentencePauseMs = 180,
     this.paragraphPauseMs = 400,
@@ -13,6 +17,7 @@ class TtsSettings {
     this.keepScreenAwake = true,
     this.defaultVoiceId = 'bria',
     this.maxReferenceAudioLen = 12,
+    this.paragraphMode = false,
   });
 
   TtsSettings copyWith({
@@ -22,6 +27,7 @@ class TtsSettings {
     bool? keepScreenAwake,
     String? defaultVoiceId,
     int? maxReferenceAudioLen,
+    bool? paragraphMode,
   }) {
     return TtsSettings(
       sentencePauseMs: sentencePauseMs ?? this.sentencePauseMs,
@@ -30,6 +36,7 @@ class TtsSettings {
       keepScreenAwake: keepScreenAwake ?? this.keepScreenAwake,
       defaultVoiceId: defaultVoiceId ?? this.defaultVoiceId,
       maxReferenceAudioLen: maxReferenceAudioLen ?? this.maxReferenceAudioLen,
+      paragraphMode: paragraphMode ?? this.paragraphMode,
     );
   }
 
@@ -41,6 +48,7 @@ class TtsSettings {
       'keepScreenAwake': keepScreenAwake,
       'defaultVoiceId': defaultVoiceId,
       'maxReferenceAudioLen': maxReferenceAudioLen,
+      'paragraphMode': paragraphMode,
     };
   }
 
@@ -52,6 +60,7 @@ class TtsSettings {
       keepScreenAwake: json['keepScreenAwake'] as bool? ?? true,
       defaultVoiceId: json['defaultVoiceId'] as String? ?? 'bria',
       maxReferenceAudioLen: json['maxReferenceAudioLen'] as int? ?? 12,
+      paragraphMode: json['paragraphMode'] as bool? ?? false,
     );
   }
 }

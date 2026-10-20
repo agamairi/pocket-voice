@@ -173,6 +173,38 @@ class TextSegmenter {
     return chunks;
   }
 
+  /// Joins the sentence chunks of each paragraph into one chunk per paragraph.
+  ///
+  /// Used by paragraph mode so PocketTTS generates a whole paragraph in one pass
+  /// (one voice run per paragraph instead of one per sentence). The merged chunk
+  /// keeps the first sentence's tag and is always the end of its paragraph.
+  static List<TextChunk> mergeParagraphs(List<TextChunk> sentenceChunks) {
+    final merged = <TextChunk>[];
+    final buffer = <String>[];
+    String? paragraphTag;
+
+    void flush() {
+      if (buffer.isEmpty) return;
+      merged.add(TextChunk(
+        index: merged.length,
+        text: buffer.join(' '),
+        isEndOfParagraph: true,
+        tag: paragraphTag,
+      ));
+      buffer.clear();
+      paragraphTag = null;
+    }
+
+    for (final chunk in sentenceChunks) {
+      if (buffer.isEmpty) paragraphTag = chunk.tag;
+      buffer.add(chunk.text);
+      if (chunk.isEndOfParagraph) flush();
+    }
+    flush();
+
+    return merged;
+  }
+
   /// Splits a paragraph into sentences, avoiding abbreviations, numbers, and quotes.
   static List<String> _splitSentences(String text) {
     if (text.trim().isEmpty) return [];

@@ -9,6 +9,9 @@ import '../../shared/utils/text_segmenter.dart';
 import '../../shared/utils/wav_concatenator.dart';
 import 'model_manager.dart';
 
+/// Fixed PocketTTS sampling seed (documented `seed` key in sherpa-onnx's Pocket extra config).
+const int _pocketSamplingSeed = 42;
+
 class GenerationCancelledException implements Exception {
   final String message;
   GenerationCancelledException([this.message = 'Narration generation was cancelled.']);
@@ -120,7 +123,11 @@ class PocketTtsService {
     }
 
     // Segment text into manageable chunks
-    final chunks = TextSegmenter.segmentText(text);
+    final sentenceChunks = TextSegmenter.segmentText(text);
+    // Paragraph mode generates one chunk per paragraph instead of one per sentence.
+    final chunks = settings.paragraphMode
+        ? TextSegmenter.mergeParagraphs(sentenceChunks)
+        : sentenceChunks;
     if (chunks.isEmpty) {
       throw Exception('No narratable text provided.');
     }
@@ -308,12 +315,17 @@ void _ttsWorkerIsolate(_IsolateJobConfig job) async {
       throw Exception('Failed to read reference audio: ${job.referenceAudioPath}');
     }
 
+    // A fixed sampling seed means every sentence draws the same random noise, so
+    // the voice stays closer to the same timbre from one sentence to the next.
     final genConfig = sherpa_onnx.OfflineTtsGenerationConfig(
       sid: 0,
       speed: 1.0,
       referenceAudio: wave.samples,
       referenceSampleRate: wave.sampleRate,
-      extra: {"max_reference_audio_len": job.maxReferenceAudioLen},
+      extra: {
+        "max_reference_audio_len": job.maxReferenceAudioLen,
+        "seed": _pocketSamplingSeed,
+      },
     );
 
     final totalChunks = job.chunks.length;

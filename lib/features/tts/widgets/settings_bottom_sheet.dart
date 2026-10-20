@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/constants/app_info.dart';
 import '../../../shared/utils/duration_formatter.dart';
+import '../../../shared/utils/update_checker.dart';
 import '../model_manager.dart';
 import '../tts_controller.dart';
 
@@ -18,8 +20,11 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
   late int _paragraphPauseMs;
   late int _numThreads;
   late bool _keepScreenAwake;
+  late bool _paragraphMode;
   late int _maxReferenceAudioLen;
   int _installedModelSizeBytes = 0;
+  bool _isCheckingForUpdates = false;
+  String? _updateStatus;
 
   @override
   void initState() {
@@ -29,6 +34,7 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
     _paragraphPauseMs = s.paragraphPauseMs;
     _numThreads = s.numThreads;
     _keepScreenAwake = s.keepScreenAwake;
+    _paragraphMode = s.paragraphMode;
     _maxReferenceAudioLen = s.maxReferenceAudioLen;
     _loadModelSize();
   }
@@ -49,6 +55,7 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
       numThreads: _numThreads,
       keepScreenAwake: _keepScreenAwake,
       maxReferenceAudioLen: _maxReferenceAudioLen,
+      paragraphMode: _paragraphMode,
     );
     widget.controller.updateSettings(updated);
   }
@@ -200,9 +207,9 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
                             ),
                             Slider(
                               value: _sentencePauseMs.toDouble(),
-                              min: 50,
+                              min: 0,
                               max: 1000,
-                              divisions: 19,
+                              divisions: 100,
                               label: '$_sentencePauseMs ms',
                               onChanged: (val) {
                                 setState(() => _sentencePauseMs = val.round());
@@ -237,9 +244,9 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
                             ),
                             Slider(
                               value: _paragraphPauseMs.toDouble(),
-                              min: 100,
+                              min: 0,
                               max: 2000,
-                              divisions: 19,
+                              divisions: 200,
                               label: '$_paragraphPauseMs ms',
                               onChanged: (val) {
                                 setState(() => _paragraphPauseMs = val.round());
@@ -253,6 +260,21 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      tileColor: theme.colorScheme.surfaceContainerLow,
+                      title: const Text('Paragraph mode', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text(
+                        'Generates each paragraph in one pass so the voice stays steadier. Sentence pauses are then not used; paragraph pauses still apply. Very long paragraphs may drift.',
+                      ),
+                      value: _paragraphMode,
+                      onChanged: (val) {
+                        setState(() => _paragraphMode = val);
+                        _saveSettings();
+                      },
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -440,7 +462,29 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
                             const SizedBox(height: 8),
                             _buildInfoRow('Audio Output', AppInfo.audioFormat),
                             const SizedBox(height: 8),
-                            _buildInfoRow('Studio Voices', '16 Included (8 Female, 8 Male)'),
+                            _buildInfoRow('Studio Voices', '18 Included (8 Female, 10 Male)'),
+                            const Divider(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.tonalIcon(
+                                onPressed: _isCheckingForUpdates ? null : _checkForUpdates,
+                                icon: _isCheckingForUpdates
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.system_update_alt),
+                                label: Text(_isCheckingForUpdates ? 'Checking...' : 'Check for updates'),
+                              ),
+                            ),
+                            if (_updateStatus != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _updateStatus!,
+                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -454,6 +498,61 @@ class _SettingsBottomSheetState extends State<SettingsBottomSheet> {
         );
       },
     );
+  }
+
+  /// Asks GitHub for the latest release and reports whether it is newer than this build.
+  Future<void> _checkForUpdates() async {
+    setState(() {
+      _isCheckingForUpdates = true;
+      _updateStatus = null;
+    });
+
+    try {
+      final result = await UpdateChecker.check(currentVersion: AppInfo.appVersion);
+      if (!mounted) return;
+
+      if (result.isUpdateAvailable) {
+        setState(() => _updateStatus = 'Version ${result.latestVersion} is available.');
+        await _showUpdateDialog(result);
+      } else {
+        setState(() => _updateStatus = 'You are on the latest version (v${AppInfo.appVersion}).');
+      }
+    } on UpdateCheckException catch (e) {
+      if (mounted) setState(() => _updateStatus = e.message);
+    } finally {
+      if (mounted) setState(() => _isCheckingForUpdates = false);
+    }
+  }
+
+  Future<void> _showUpdateDialog(UpdateCheckResult result) async {
+    final openRelease = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update available'),
+        content: Text(
+          'Pocket Voice ${result.latestVersion} is available. You have v${result.currentVersion}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open GitHub'),
+          ),
+        ],
+      ),
+    );
+
+    if (openRelease != true) return;
+    final launched = await launchUrl(
+      Uri.parse(result.releaseUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && mounted) {
+      setState(() => _updateStatus = 'Could not open ${result.releaseUrl}');
+    }
   }
 
   Widget _buildInfoRow(String label, String value) {

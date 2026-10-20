@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,9 @@ import 'pocket_tts_service.dart';
 import 'voice_manager.dart';
 
 class TtsController extends ChangeNotifier {
+  static const String _settingsKey = 'tts_settings_v2';
+  static const String _legacySettingsKey = 'tts_settings_v1';
+
   final ModelManager modelManager;
   final VoiceManager voiceManager;
   final PocketTtsService ttsService;
@@ -116,14 +120,30 @@ class TtsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Loads settings from JSON storage, falling back to the legacy query-string
+  /// format. The legacy format stored booleans as text, so they must be converted
+  /// back before TtsSettings.fromJson reads them; otherwise the whole load fails
+  /// and every setting silently reverts to its default.
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('tts_settings_v1');
+
+    final jsonStr = prefs.getString(_settingsKey);
     if (jsonStr != null) {
       try {
-        _settings = TtsSettings.fromJson(Map<String, dynamic>.from(
-          Uri.splitQueryString(jsonStr).map((k, v) => MapEntry(k, int.tryParse(v) ?? v)),
-        ));
+        _settings = TtsSettings.fromJson(Map<String, dynamic>.from(jsonDecode(jsonStr) as Map));
+        return;
+      } catch (_) {}
+    }
+
+    final legacyStr = prefs.getString(_legacySettingsKey);
+    if (legacyStr != null) {
+      try {
+        final legacy = Uri.splitQueryString(legacyStr).map((k, v) {
+          if (v == 'true') return MapEntry(k, true);
+          if (v == 'false') return MapEntry(k, false);
+          return MapEntry(k, int.tryParse(v) ?? v);
+        });
+        _settings = TtsSettings.fromJson(Map<String, dynamic>.from(legacy));
       } catch (_) {}
     }
   }
@@ -133,9 +153,7 @@ class TtsController extends ChangeNotifier {
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
-    final map = newSettings.toJson();
-    final queryStr = map.entries.map((e) => '${e.key}=${e.value}').join('&');
-    await prefs.setString('tts_settings_v1', queryStr);
+    await prefs.setString(_settingsKey, jsonEncode(newSettings.toJson()));
   }
 
   Future<void> refreshVoices() async {
